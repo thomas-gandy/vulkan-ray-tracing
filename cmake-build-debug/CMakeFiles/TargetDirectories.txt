@@ -1,0 +1,3 @@
+/Users/tom/Programming/Projects/VulkanRayTracing/cmake-build-debug/CMakeFiles/VulkanRayTracing.dir
+/Users/tom/Programming/Projects/VulkanRayTracing/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/tom/Programming/Projects/VulkanRayTracing/cmake-build-debug/CMakeFiles/rebuild_cache.dir

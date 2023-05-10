@@ -1,0 +1,218 @@
+#version 450
+
+
+const float FOV = 45.f;
+const float FOV_SCALE = tan(FOV * 0.5f);
+const float REFLECTION_COEFFICIENT = 0.2f;
+const int MAX_RAY_DEPTH = 5;
+const float EPSILON = 0.001f;
+const float INFINITY = 1.0e30;
+const vec3 BACKGROUND_COLOR = vec3(0.1f, 0.1f, 0.1f);
+
+struct Vertex {
+    vec3 position;
+    vec3 color;
+};
+
+struct Triangle {
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+};
+
+struct PointLight {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};
+
+struct Camera {
+    mat4 worldMatrix;
+    vec3 position;
+};
+
+//Triangle triangles[1] = {Triangle(
+//    Vertex(vec3(-1.f, -1.f, 5.f), vec3(1.f, 0.f, 0.f)),
+//    Vertex(vec3(0.f, 1.f, 5.f), vec3(0.f, 0.f, 1.f)),
+//    Vertex(vec3(1.f, -1.f, 5.f), vec3(0.f, 1.f, 0.f))
+//)};
+
+layout (set = 0, binding = 0, rgba16f) writeonly uniform image2D renderImage;
+layout (std140, set = 1, binding = 0) uniform LocationBuffer {
+    Camera camera;
+};
+layout (std430, set = 2, binding = 0) buffer TrianglesBuffer {
+    Triangle triangles[];
+};
+layout (std430, set = 3, binding = 0) buffer PointLights {
+    PointLight lights[];
+};
+
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+bool intersectTriangle(Ray ray, Triangle triangle, out float t, out float u, out float v) {
+    vec3 edge1 = triangle.v1.position - triangle.v0.position;
+    vec3 edge2 = triangle.v2.position - triangle.v0.position;
+    vec3 h = cross(ray.direction, edge2);
+    float a = dot(edge1, h);
+    if (a > -0.00001f && a < 0.00001f) {
+        return false;
+    }
+    float f = 1.f / a;
+    vec3 s = ray.origin - triangle.v0.position;
+    u = f * dot(s, h);
+    if (u < 0.f || u > 1.f) {
+        return false;
+    }
+    vec3 q = cross(s, edge1);
+    v = f * dot(ray.direction, q);
+    if (v < 0.f || u + v > 1.f) {
+        return false;
+    }
+    t = f * dot(edge2, q);
+    if (t > 0.00001f) {
+        return true;
+    }
+    return false;
+}
+
+vec3 getInterpolatedColor(Triangle triangle, float u, float v) {
+    vec3 color = vec3(0.f);
+    color += triangle.v0.color * (1.f - u - v);
+    color += triangle.v1.color * u;
+    color += triangle.v2.color * v;
+    return color;
+}
+
+vec3 getNormalToRay(Triangle triangle, Ray ray) {
+    vec3 edge1 = triangle.v1.position - triangle.v0.position;
+    vec3 edge2 = triangle.v2.position - triangle.v0.position;
+    vec3 normal = normalize(cross(edge1, edge2));
+
+    if (dot(normal, ray.direction) > 0.f) return -normal;
+    return normal;
+}
+
+bool rayIntersectsScene(Ray ray, out Triangle hitTriangle, out float h_t, out float h_u, out float h_v) {
+    float closestT = INFINITY;
+    bool hit = false;
+
+    for (int i = 0; i < triangles.length(); i++) {
+        float t, u, v;
+        if (intersectTriangle(ray, triangles[i], t, u, v)) {
+            hit = true;
+            if (t < closestT) {
+                closestT = t;
+                h_t = t;
+                h_u = u;
+                h_v = v;
+                hitTriangle = triangles[i];
+            }
+        }
+    }
+
+    return hit;
+}
+
+float getDirectLighting(vec3 hitPoint, vec3 hitNormal) {
+    float directLighting = 0.f;
+    for (int i = 0; i < lights.length(); i++) {
+        vec3 lightDirection = normalize(lights[i].position - hitPoint);
+
+        Triangle hitTriangle;
+        float t, u, v;
+        if (rayIntersectsScene(Ray(hitPoint, lightDirection), hitTriangle, t, u, v)) {
+            if (t < length(lights[i].position - hitPoint)) continue;
+        }
+
+        float lightDistance = length(lights[i].position - hitPoint);
+        float falloff = 4 * 3.1459 * lightDistance * lightDistance;
+        float lightDotNormal = clamp(dot(lightDirection, hitNormal), 0.f, 1.f);
+        float lightIntensity = lights[i].intensity * lightDotNormal / falloff;
+
+        directLighting += lightIntensity;
+    }
+
+    return directLighting;
+}
+
+vec3 fireRay(Ray ray, int depth) {
+//    Triangle hitTriangle;
+//    float t, u, v;
+//
+//    bool hit = rayIntersectsScene(ray, hitTriangle, t, u, v);
+//    if (!hit) return BACKGROUND_COLOR;
+
+
+    Ray currentRay = ray;
+    vec3 rayColors[MAX_RAY_DEPTH];
+    int depthReached = 0;
+
+    // Wind Stack
+    for (int i = 0; i < depth; i++) {
+        Triangle hitTriangle;
+        float t, u, v;
+        depthReached = i + 1;
+
+        bool hit = rayIntersectsScene(currentRay, hitTriangle, t, u, v);
+        if (!hit) {
+            rayColors[i] = BACKGROUND_COLOR;
+            break;
+        }
+
+        vec3 hitColor = getInterpolatedColor(hitTriangle, u, v);
+        vec3 hitNormal = getNormalToRay(hitTriangle, currentRay);
+        vec3 hitPoint = currentRay.origin + currentRay.direction * (t - EPSILON);
+
+        float lightIntensity = getDirectLighting(hitPoint, hitNormal);
+        lightIntensity = clamp(lightIntensity, 0.f, 1.f);
+
+        hitColor *= lightIntensity;
+        hitColor = clamp(hitColor, 0.f, 1.f);
+        rayColors[i] = hitColor;
+
+        Ray reflectedRay;
+        reflectedRay.origin = hitPoint;
+        reflectedRay.direction = reflect(currentRay.direction, hitNormal);
+
+        currentRay = reflectedRay;
+    }
+
+    // Unwind Stack
+    for (int i = depthReached - 1; i >= 0; i--) {
+//        rayColors[i] = rayColors[i] * (1.f - 0.1f) + BACKGROUND_COLOR * 0.1f;
+        if (i > 0) {
+            rayColors[i - 1] = rayColors[i - 1] * (1.f - REFLECTION_COEFFICIENT) + rayColors[i] * REFLECTION_COEFFICIENT;
+        }
+    }
+
+    return rayColors[0];
+}
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+void main() {
+    if (gl_GlobalInvocationID.x >= imageSize(renderImage).x || gl_GlobalInvocationID.y >= imageSize(renderImage).y) return;
+
+    vec2 imageDimensions = vec2(imageSize(renderImage));
+    float aspectRatio = imageDimensions.x / imageDimensions.y;
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+    vec2 ratioCoords = (vec2(pixelCoords) + .5f) / vec2(imageSize(renderImage));
+
+    vec2 ndcCoords = (ratioCoords * 2.f - 1.f) * FOV_SCALE;
+    ndcCoords.x *= aspectRatio;
+    ndcCoords.y = -ndcCoords.y;
+
+    vec3 cameraSpaceRayDirection = normalize(vec3(ndcCoords, 1.f));
+    vec3 worldSpaceRayDirection = (camera.worldMatrix * vec4(cameraSpaceRayDirection, 0.f)).xyz;
+
+    vec3 rayColor = fireRay(Ray(camera.position, worldSpaceRayDirection), 4);
+
+//    vec3 outputColor = vec3(worldSpaceRayDirection.z, worldSpaceRayDirection.y, worldSpaceRayDirection.x);
+    vec3 outputColor = rayColor;
+    imageStore(renderImage, pixelCoords, vec4(outputColor, 1));
+}
