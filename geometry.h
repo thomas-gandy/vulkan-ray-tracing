@@ -33,6 +33,15 @@ struct PointLight {
     alignas (4) float intensity;
 };
 
+struct Ray {
+    glm::vec3 origin;
+    glm::vec3 direction;
+};
+
+struct ArcballSphere {
+    glm::vec3 center;
+    float radius;
+};
 
 struct Transform {
     glm::vec3 position{};

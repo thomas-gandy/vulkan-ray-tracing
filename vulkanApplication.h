@@ -78,6 +78,16 @@ class VulkanApplication {
 
     Camera camera;
     double lastMouseX = 0, lastMouseY = 0;
+    bool mouseDragging = false;
+    glm::quat startArcballPosition{};
+    glm::quat currentArcballPosition{};
+    bool presentationMode = false;
+    bool presentationModeReleased = true;
+
+    int objectIndexOfFocus = 1;
+    glm::quat initialRotationOfObject{};
+
+
     KDTree kdTree;
     std::vector<Triangle> triangles;
     std::vector<PointLight> pointLights;
@@ -147,7 +157,7 @@ class VulkanApplication {
     void updateLocationDescriptorSet(const vk::DescriptorSet& descriptorSet, const vk::Buffer& matrixBuffer);
 
     void updateTriangleBuffers();
-    void updateTriangleBuffer(const vk::Buffer& buffer);
+    void updateTriangleBuffer(const vk::DeviceMemory& memory);
     void updateTriangleDescriptorSets();
     void updateTriangleDescriptorSet(const vk::DescriptorSet& descriptorSet, const vk::Buffer& triangleBuffer);
 
@@ -160,7 +170,8 @@ class VulkanApplication {
 
     void generateStuff(const glm::vec3& center);
     void handleMouseAction();
-    void castViewRay();
+    bool rayIntersectsSphere(Ray ray, ArcballSphere sphere, glm::vec3& surfaceCoordinateResult);
+
     void handleKeyboardAction();
     void mainloop();
     void renderFrame(int currentFrameIndex);

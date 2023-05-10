@@ -19,8 +19,7 @@
 VulkanApplication::VulkanApplication(std::string applicationName): applicationName(std::move(applicationName)) {
     Plane plane;
     plane.transform.scale = 2000;
-    plane.precomputeTriangles();
-    this->triangles = plane.precomputedWorldTriangles;
+    this->vertexModels.push_back(plane);
 
     Triangle triangle{
             {{-1, -1, 5}, {1.f, 0.f, 1.f}},
@@ -30,8 +29,7 @@ VulkanApplication::VulkanApplication(std::string applicationName): applicationNa
     TriangleModel triangleModel;
     triangleModel.transform.position = {-100, 1.f, -2};
     for (int i = 0; i < 100; i++) {
-        triangleModel.precomputeTriangles();
-//        this->triangles.insert(this->triangles.end(), triangleModel.precomputedWorldTriangles.begin(), triangleModel.precomputedWorldTriangles.end());
+//        this->vertexModels.push_back(triangleModel);
         triangleModel.transform.position += glm::vec3{2.f, 0, 0};
     }
 
@@ -55,11 +53,15 @@ VulkanApplication::VulkanApplication(std::string applicationName): applicationNa
     PlyFileHandler plyFile("/Users/tom/Programming/Projects/ProceduralGeneration/assets/models/bunny/bunny-high-resolution.ply");
 //    PlyFileHandler plyFile("/Users/tom/Programming/Projects/ProceduralGeneration/assets/models/dragon/dragon-medium-resolution.ply");
 
-    auto vertexModel = plyFile.getVertexModel();
-    vertexModel.transform.scale = 10;
-//    vertexModel.transform.quaternionRotation = glm::angleAxis(glm::radians(180.f), glm::vec3{0, 1, 0});
-    vertexModel.precomputeTriangles();
-//    this->triangles = vertexModel.precomputedWorldTriangles;
+    auto plyVertexModel = plyFile.getVertexModel();
+    plyVertexModel.transform.scale = 10;
+//    plyVertexModel.transform.quaternionRotation = glm::angleAxis(glm::radians(180.f), glm::vec3{0, 1, 0});
+//    this->vertexModels.push_back(plyVertexModel);
+
+    for (auto& vertexModel : this->vertexModels) {
+        vertexModel.precomputeTriangles();
+        this->triangles.insert(this->triangles.end(), vertexModel.precomputedWorldTriangles.begin(), vertexModel.precomputedWorldTriangles.end());
+    }
 
     PointLight pointLight;
     pointLight.position = {0, 5, -2};
@@ -90,7 +92,7 @@ VulkanApplication::VulkanApplication(std::string applicationName): applicationNa
     this->createDescriptorPool();
     this->allocateDescriptorSets();
     this->updateRenderImageDescriptorSets();
-    this->updateTriangleBuffers();
+//    this->updateTriangleBuffers();
     this->updatePointLightBuffers();
     this->createSynchronisationObjects();
 }
@@ -109,8 +111,7 @@ void VulkanApplication::generateStuff(const glm::vec3 &center) {
 
         triangleModel.transform.position = position + center;
         triangleModel.yaw(glm::degrees(-theta));
-        triangleModel.precomputeTriangles();
-        this->triangles.insert(this->triangles.end(), triangleModel.precomputedWorldTriangles.begin(), triangleModel.precomputedWorldTriangles.end());
+        this->vertexModels.push_back(triangleModel);
 
         theta += angleIncrement;
     }
@@ -423,9 +424,9 @@ void VulkanApplication::createTriangleBuffers() {
     const auto offsetInDeviceMemoryToMapTo = 0;
     this->triangleBufferSize = sizeof(Triangle) * this->triangles.size();
     for (int i = 0; i < this->framesInFlight; i++) {
-        const auto buffer = this->createBuffer(this->triangleBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        const auto buffer = this->createBuffer(this->triangleBufferSize, vk::BufferUsageFlagBits::eStorageBuffer);
         const auto memoryRequirements = this->logicalDevice.getBufferMemoryRequirements(buffer);
-        const auto allocatedMemory = this->allocateDeviceLocalBufferMemory(memoryRequirements);
+        const auto allocatedMemory = this->allocateBufferMemory(memoryRequirements);
         this->logicalDevice.bindBufferMemory(buffer, allocatedMemory, offsetInDeviceMemoryToMapTo);
 
         this->triangleBuffers.push_back(buffer);
@@ -723,31 +724,39 @@ void VulkanApplication::updateRenderImageDescriptorSet(const vk::DescriptorSet& 
 
 void VulkanApplication::updateTriangleBuffers() {
     for (int i = 0; i < this->framesInFlight; i++) {
-        const auto& buffer = this->triangleBuffers[i];
-        this->updateTriangleBuffer(buffer);
+        const auto& memory = this->triangleBuffersMemory[i];
+        this->updateTriangleBuffer(memory);
     }
 
     this->updateTriangleDescriptorSets();
 }
 
-void VulkanApplication::updateTriangleBuffer(const vk::Buffer& buffer) {
-    const auto stagingBuffer = this->createBuffer(this->triangleBufferSize, vk::BufferUsageFlagBits::eTransferSrc);
-    const auto memoryRequirements = this->logicalDevice.getBufferMemoryRequirements(stagingBuffer);
-    const auto stagingBufferMemory = this->allocateBufferMemory(memoryRequirements);
-    this->logicalDevice.bindBufferMemory(stagingBuffer, stagingBufferMemory, 0);
+void VulkanApplication::updateTriangleBuffer(const vk::DeviceMemory& memory) {
+//    const auto stagingBuffer = this->createBuffer(this->triangleBufferSize, vk::BufferUsageFlagBits::eTransferSrc);
+//    const auto memoryRequirements = this->logicalDevice.getBufferMemoryRequirements(stagingBuffer);
+//    const auto stagingBufferMemory = this->allocateBufferMemory(memoryRequirements);
+//    this->logicalDevice.bindBufferMemory(stagingBuffer, stagingBufferMemory, 0);
+//
+//    auto mappedMemory = this->logicalDevice.mapMemory(stagingBufferMemory, 0, this->triangleBufferSize, vk::MemoryMapFlags());
+//    std::memcpy(mappedMemory, this->triangles.data(), this->triangleBufferSize);
+//    this->logicalDevice.unmapMemory(stagingBufferMemory);
+//
+//    const auto copyRegion = vk::BufferCopy{0, 0, this->triangleBufferSize};
+//    const auto commandBuffer = this->getOneTimeCommandBuffer();
+//    commandBuffer.copyBuffer(stagingBuffer, buffer, copyRegion);
+//    this->executeOneTimeCommandBuffer(commandBuffer);
+//
+//    this->logicalDevice.destroyBuffer(stagingBuffer);
+//    this->logicalDevice.freeMemory(stagingBufferMemory);
 
-    auto mappedMemory = this->logicalDevice.mapMemory(stagingBufferMemory, 0, this->triangleBufferSize, vk::MemoryMapFlags());
+    this->triangles.clear();
+    for (auto& vertexModel : this->vertexModels) {
+        vertexModel.precomputeTriangles();
+        this->triangles.insert(this->triangles.end(), vertexModel.precomputedWorldTriangles.begin(), vertexModel.precomputedWorldTriangles.end());
+    }
+    auto mappedMemory = this->logicalDevice.mapMemory(memory, 0, this->triangleBufferSize, vk::MemoryMapFlags());
     std::memcpy(mappedMemory, this->triangles.data(), this->triangleBufferSize);
-    this->logicalDevice.unmapMemory(stagingBufferMemory);
-
-    const auto copyRegion = vk::BufferCopy{0, 0, this->triangleBufferSize};
-    const auto commandBuffer = this->getOneTimeCommandBuffer();
-    commandBuffer.copyBuffer(stagingBuffer, buffer, copyRegion);
-    this->executeOneTimeCommandBuffer(commandBuffer);
-
-    this->logicalDevice.destroyBuffer(stagingBuffer);
-    this->logicalDevice.freeMemory(stagingBufferMemory);
-
+    this->logicalDevice.unmapMemory(memory);
 }
 
 void VulkanApplication::updateTriangleDescriptorSet(const vk::DescriptorSet &descriptorSet, const vk::Buffer &triangleBuffer) {
@@ -874,17 +883,76 @@ void VulkanApplication::start() {
 }
 
 void VulkanApplication::handleMouseAction() {
-    // Relative mouse movement since last call
     double mouseX, mouseY;
     glfwGetCursorPos(window, &mouseX, &mouseY);
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        auto ndcX = -((float)2 * (float)mouseX / (this->windowWidth - 1) - 1.f);
+        auto ndcY = ((float)2 * (float)mouseY / (this->windowHeight - 1) - 1.f);
+
+        // Get distance between mouse and screen center to see if it is larger than radius (outside arcball)
+        const auto norm = std::sqrt(ndcX*ndcX + ndcY*ndcY);
+        float z = 0;
+        if (norm > 1) { // Arcball assumed to have a radius of 1
+            // If outside radius, map onto arcball edge
+            const auto normalised = glm::normalize(glm::vec2(ndcX, ndcY));
+            ndcX = normalised.x;
+            ndcY = normalised.y;
+        } else z = std::sqrt(1 - ndcX*ndcX - ndcY*ndcY);
+
+        auto& objectOfFocus = this->vertexModels[this->objectIndexOfFocus];
+
+        // Set arcball start of drag variables
+        if (!this->mouseDragging) {
+            this->mouseDragging = true;
+            this->startArcballPosition = {0, {ndcX, ndcY, z}};
+            this->initialRotationOfObject = this->vertexModels[this->objectIndexOfFocus].transform.quaternionRotation;
+            return;
+        }
+        this->currentArcballPosition = {0, {ndcX, ndcY, z}};
+
+        const auto drag = this->currentArcballPosition * glm::conjugate(this->startArcballPosition);
+        objectOfFocus.transform.quaternionRotation = drag * this->initialRotationOfObject;
+        objectOfFocus.precomputeTriangles();
+    } else {
+        this->mouseDragging = false;
+        glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    }
 
     const auto relativeScreenX = mouseX - this->lastMouseX;
     const auto relativeScreenY = mouseY - this->lastMouseY;
     this->lastMouseX = mouseX;
     this->lastMouseY = mouseY;
 
-    this->camera.quaternionRotation *= glm::angleAxis(static_cast<float>(relativeScreenX) * this->camera.sensitivity, glm::vec3(0, 1, 0));
-    this->camera.quaternionRotation *= glm::angleAxis(static_cast<float>(relativeScreenY) * this->camera.sensitivity, glm::vec3(1, 0, 0));
+    if (!this->mouseDragging) {
+        this->camera.quaternionRotation *= glm::angleAxis(static_cast<float>(relativeScreenX) * this->camera.sensitivity, glm::vec3(0, 1, 0));
+        this->camera.quaternionRotation *= glm::angleAxis(static_cast<float>(relativeScreenY) * this->camera.sensitivity, glm::vec3(1, 0, 0));
+    }
+}
+
+bool VulkanApplication::rayIntersectsSphere(Ray ray, ArcballSphere sphere, glm::vec3 &surfaceCoordinateResult) {
+    const auto rayOrigin = ray.origin;
+    const auto rayDirection = ray.direction;
+    const auto sphereCenter = sphere.center;
+    const auto sphereRadius = sphere.radius;
+
+    const auto a = glm::dot(rayDirection, rayDirection);
+    const auto b = 2 * glm::dot(rayDirection, rayOrigin - sphereCenter);
+    const auto c = glm::dot(rayOrigin - sphereCenter, rayOrigin - sphereCenter) - sphereRadius * sphereRadius;
+
+    const auto discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return false;
+
+    const auto t1 = (-b + std::sqrt(discriminant)) / (2 * a);
+    const auto t2 = (-b - std::sqrt(discriminant)) / (2 * a);
+
+    if (t1 < 0 && t2 < 0) return false;
+
+    const auto t_hit = std::min(t1, t2);
+    surfaceCoordinateResult = rayOrigin + t_hit * rayDirection;
+
+    return true;
 }
 
 void VulkanApplication::handleKeyboardAction() {
@@ -897,6 +965,10 @@ void VulkanApplication::handleKeyboardAction() {
     if (glfwGetKey(this->window, GLFW_KEY_Q) == GLFW_PRESS) this->camera.rotateLeft();
     if (glfwGetKey(this->window, GLFW_KEY_E) == GLFW_PRESS) this->camera.rotateRight();
     if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(this->window, true);
+    if (glfwGetKey(this->window, GLFW_KEY_P) == GLFW_PRESS && this->presentationModeReleased) {
+        this->presentationMode = !this->presentationMode;
+        this->presentationModeReleased = false;
+    } else this->presentationModeReleased = true;
 }
 
 void VulkanApplication::mainloop() {
@@ -910,11 +982,11 @@ void VulkanApplication::mainloop() {
         this->handleMouseAction();
         this->handleKeyboardAction();
         this->camera.update();
-        for (auto& pointLight : this->pointLights) {
-            const auto speed = 2.f;
-            const auto range = 7.f;
-            const auto min = 0.f;
-//            pointLight.position.x = (glm::sin(t * speed) + 0) * range + min;
+        if (this->presentationMode) {
+            const auto speed = 1.f;
+            const auto range = 35.f;
+            const auto min = 5.f;
+            this->camera.position.z = (glm::sin(t * speed) + 0) * range + min;
         }
         this->renderFrame(currentFrameIndex);
 
@@ -950,7 +1022,11 @@ void VulkanApplication::renderFrame(int currentFrameIndex) {
     this->updateLocationBuffer(locationMemory);
     this->updateLocationDescriptorSet(locationSet, locationBuffer);
 
+    const auto& triangleBuffer = this->triangleBuffers[currentFrameIndex];
+    const auto& triangleMemory = this->triangleBuffersMemory[currentFrameIndex];
     const auto& triangleSet = this->descriptorSets[this->indexOfTriangleSet(currentFrameIndex)];
+    this->updateTriangleBuffer(triangleMemory);
+    this->updateTriangleDescriptorSet(triangleSet, triangleBuffer);
 
     const auto& pointLightBuffer = this->pointLightBuffers[currentFrameIndex];
     const auto& pointLightSet = this->descriptorSets[this->indexOfPointLightSet(currentFrameIndex)];
