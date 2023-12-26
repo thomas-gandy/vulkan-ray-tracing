@@ -36,7 +36,7 @@ public:
     Camera() = default;
 
     bool lookingAtEngaged = false; // true if should focus on object and not look around with mouse
-    const float sensitivity = 0.003f;
+    const float sensitivity = 0.002f;
     const float keyRotationIncrement = 0.05f;
     float keyMovementSensitivity = 0.1f;
 

@@ -45,11 +45,6 @@ VulkanApplication::VulkanApplication(std::string applicationName): applicationNa
 
 //    this->kdTree = KDTree(this->vertexModels);
 
-    std::cout << "Offset of position: " << offsetof(Vertex, position) << std::endl;
-    std::cout << "Offset of color: " << offsetof(Vertex, color) << std::endl;
-    std::cout << "Offset of cameraToWorld: " << offsetof(LocationBuffer, cameraToWorld) << std::endl;
-    std::cout << "Offset of location: " << offsetof(LocationBuffer, location) << std::endl;
-
     PlyFileHandler plyFile("/Users/tom/Programming/Projects/ProceduralGeneration/assets/models/bunny/bunny-high-resolution.ply");
 //    PlyFileHandler plyFile("/Users/tom/Programming/Projects/ProceduralGeneration/assets/models/dragon/dragon-medium-resolution.ply");
 
@@ -67,11 +62,6 @@ VulkanApplication::VulkanApplication(std::string applicationName): applicationNa
     pointLight.position = {0, 5, -2};
     pointLight.color = {1, 1, 1};
     pointLight.intensity = 250;
-//    this->pointLights.push_back(pointLight);
-    pointLight.position = {0, 5, 10};
-//    this->pointLights.push_back(pointLight);
-    pointLight.position = {0, 5, 30};
-//    this->pointLights.push_back(pointLight);
 
     this->camera.position = {0, 1.2, -2};
 
@@ -116,7 +106,7 @@ void VulkanApplication::generateStuff(const glm::vec3 &center) {
         theta += angleIncrement;
     }
 
-    this->pointLights.push_back({glm::vec3{0, 4, 0} + center, {1, 1, 1}, 250});
+    this->pointLights.push_back({glm::vec3{0, 5, 0} + center, {1, 1, 1}, 350});
 }
 
 VulkanApplication::~VulkanApplication() {
@@ -156,6 +146,7 @@ void VulkanApplication::createWindow() {
     this->window = glfwCreateWindow((int)this->windowWidth, (int)this->windowHeight, "Vulkan Ray Tracer", nullptr, nullptr);
     if (this->window == nullptr) throw std::runtime_error("Failed to create GLFW window");
     glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPos(this->window, this->windowWidth / 2, this->windowHeight / 2);
 
     glfwGetFramebufferSize(this->window, &this->framebufferWidth, &this->framebufferHeight);
     std::cout << "Framebuffer Size: " << this->framebufferWidth << "x" << this->framebufferHeight << std::endl;
@@ -751,7 +742,6 @@ void VulkanApplication::updateTriangleBuffer(const vk::DeviceMemory& memory) {
 
     this->triangles.clear();
     for (auto& vertexModel : this->vertexModels) {
-        vertexModel.precomputeTriangles();
         this->triangles.insert(this->triangles.end(), vertexModel.precomputedWorldTriangles.begin(), vertexModel.precomputedWorldTriangles.end());
     }
     auto mappedMemory = this->logicalDevice.mapMemory(memory, 0, this->triangleBufferSize, vk::MemoryMapFlags());
@@ -888,6 +878,10 @@ void VulkanApplication::handleMouseAction() {
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        if (!this->mouseDragging) {
+            glfwSetCursorPos(this->window, this->windowWidth / 2, this->windowHeight / 2);
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+        }
         auto ndcX = -((float)2 * (float)mouseX / (this->windowWidth - 1) - 1.f);
         auto ndcY = ((float)2 * (float)mouseY / (this->windowHeight - 1) - 1.f);
 
@@ -981,17 +975,34 @@ void VulkanApplication::mainloop() {
         glfwPollEvents();
         this->handleMouseAction();
         this->handleKeyboardAction();
-        this->camera.update();
+
+        for (int i = 1; i < 2; i++) {
+            auto& vertexModel = this->vertexModels[i];
+            vertexModel.transform.quaternionRotation *= glm::angleAxis(0.01f, glm::vec3(0, 1, 0));
+            vertexModel.precomputeTriangles();
+            for (auto& triangle : vertexModel.precomputedWorldTriangles) {
+                const auto st = (glm::sin(t) + 1) * .5f;
+                const auto tt = (glm::sin(t + 0.3f) + 1) * .5f;
+                const auto qt = (glm::sin(t + 0.5f) + 1) * .5f;
+                triangle.v0.color = st * glm::vec3{1, 0, 0} + (1 - st) * glm::vec3{0, 1, 1};
+                triangle.v1.color = tt * glm::vec3{0, 1, 0} + (1 - tt) * glm::vec3{1, 0, 1};
+                triangle.v2.color = qt * glm::vec3{0, 0, 1} + (1 - qt) * glm::vec3{1, 1, 0};
+            }
+        }
+
         if (this->presentationMode) {
             const auto speed = 1.f;
             const auto range = 35.f;
             const auto min = 5.f;
             this->camera.position.z = (glm::sin(t * speed) + 0) * range + min;
         }
+        if (this->camera.position.y < 0.01) this->camera.position.y = 0.01;
+        this->camera.update();
+
         this->renderFrame(currentFrameIndex);
 
         currentFrameIndex = (currentFrameIndex + 1) % static_cast<int>(this->framesInFlight);
-        t += 0.005;
+        t += 0.01;
 //        const auto endTime = std::chrono::high_resolution_clock::now();
 //        const auto elapsedTime = endTime - startTime;
 //        std::cout << "CPU Frame Dispatch Time: " << elapsedTime.count() << std::endl;

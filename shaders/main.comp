@@ -1,11 +1,11 @@
 #version 450
 
 
-const float FOV = 45.f;
+const float FOV = (70.f / 180) * 3.1459f;
 const float FOV_SCALE = tan(FOV * 0.5f);
 const float REFLECTION_COEFFICIENT = 0.2f;
 const int MAX_RAY_DEPTH = 5;
-const float EPSILON = 0.001f;
+const float EPSILON = 0.00001f;
 const float INFINITY = 1.0e30;
 const vec3 BACKGROUND_COLOR = vec3(0.1f, 0.1f, 0.1f);
 
